@@ -18,6 +18,9 @@ using Rectangle = System.Drawing.Rectangle;
 
 using MySql.Data.MySqlClient;
 
+//firebase 연동//혜정 추가
+using Google.Cloud.Firestore;
+
 namespace RobotCC
 {
 
@@ -27,6 +30,9 @@ namespace RobotCC
     // Current 변수 역시 리포트할 대상을 위해서 임시 사용해야 한다.
     public partial class ReportForm : Form
     {
+        //firebase 연동//혜정 추가
+        FirestoreDb db;
+        
         //pdf 파일 이름 위한 변수
         public int pdfNum = 0;
 
@@ -347,6 +353,19 @@ namespace RobotCC
             if (G.DEBUG) Console.WriteLine("<" + CurrentPlantNumber + ">,<" + CurrentPlantName + ">,<" + CurrentContactEmail + ">");
         }
 
+        //firebase 데이터 삭제//혜정 추가
+        async void Delete_All_Documents_In_A_Collection()
+        {
+            CollectionReference collref = db.Collection("SearchData");
+            QuerySnapshot snap = await collref.GetSnapshotAsync();
+
+            foreach (DocumentSnapshot doc in snap.Documents)
+            {
+                await doc.Reference.DeleteAsync();
+            }
+
+        }
+
         private void searchBtn_Click(object sender, EventArgs e)
         {
             SqlConnection con = new SqlConnection(G.connectionString);
@@ -429,8 +448,51 @@ namespace RobotCC
             DisplayReportTable();
             MessageBox.Show("조회되었습니다.");
 
-            //DB연결 후 데이터 전송//혜정 추가
-            using (MySqlConnection conn = new MySqlConnection("Server=localhost;Port=3306;Database=login_dataset;Uid=root;Pwd=tkfkdgo09013"))
+            //firebase 연결 후 데이터 전송 시작//혜정 추가
+            string path = AppDomain.CurrentDomain.BaseDirectory + @"robotcontrol-29725-firebase-adminsdk-nbbs4-d158b710d3.json";
+            Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", path);
+
+            db = FirestoreDb.Create("robotcontrol-29725");
+
+            //기존에 있던 데이터 삭제하기
+            Delete_All_Documents_In_A_Collection();
+
+            CollectionReference coll = db.Collection("SearchData");
+
+            //발전소 이름 받아오기
+            String comboS = comboBox1.Text.ToString();
+            String plantId = comboS.Substring(7, 6);
+            //각 행의 정보를 반복문으로 불러온다
+            for (int i = 0; i < dataGridView1.Rows.Count; i++)
+            {
+                String date = dataGridView1.Rows[i].Cells[0].Value.ToString();
+                String Rid = dataGridView1.Rows[i].Cells[1].Value.ToString();
+                String period = dataGridView1.Rows[i].Cells[2].Value.ToString();
+                String area = dataGridView1.Rows[i].Cells[3].Value.ToString();
+                //데이터 열람 기한 
+                String startT = dateTimeFrom.Value.ToString("yyyy-MM-dd");
+                String endT = dateTimeTo.Value.ToString("yyyy-MM-dd");
+                DateTime nowDate = DateTime.Now;
+                String insertTime = nowDate.ToString("yyyy-MM-dd");
+
+
+                Dictionary<string, object> data1 = new Dictionary<string, object>()
+                {
+                    {"PlantId", plantId},
+                    {"StartTime", startT},
+                    {"EndTime", endT},
+                    {"RobotId", Rid},
+                    {"CleanPeriod", period},
+                    {"CleanArea", area},
+                    {"InsertTime", insertTime}
+                };
+                coll.AddAsync(data1);
+            }
+            //firebase 연결 후 데이터 전송 끝//혜정 추가
+
+            //mysql DB연결 후 데이터 전송//혜정 추가
+            //using (MySqlConnection conn = new MySqlConnection("Server=localhost;Port=3306;Database=login_dataset;Uid=root;Pwd=tkfkdgo09013"))
+            using (MySqlConnection conn = new MySqlConnection("Server=uws7-wpm-028.cafe24.com;Port=3306;Database=withtaylors;Uid=withtaylors;Pwd=Sytechnology"))
             {
                 conn.Open();
                 //mysql에 원래 있던 데이터는 전부 지워주기
@@ -445,8 +507,8 @@ namespace RobotCC
                     MessageBox.Show(ex.Message);
                 }
                 //발전소 이름 받아오기
-                String comboS = comboBox1.Text.ToString();
-                String plantId = comboS.Substring(7, 6);
+                //String comboS = comboBox1.Text.ToString();
+                //String plantId = comboS.Substring(7, 6);
                 //각 행의 정보를 반복문으로 불러온다
                 for (int i = 0; i < dataGridView1.Rows.Count; i++)
                 {
